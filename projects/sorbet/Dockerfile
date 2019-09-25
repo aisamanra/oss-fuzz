@@ -28,5 +28,6 @@ RUN bash ./bazel-0.27.0-installer-linux-x86_64.sh
 RUN git clone --depth 1 https://github.com/sorbet/sorbet.git /src/sorbet
 
 WORKDIR /src/sorbet
+ADD sorbet.diff sorbet.diff
 
 COPY build.sh /src/build.sh

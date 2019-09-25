@@ -1,0 +1,208 @@
+diff --git a/.bazelrc b/.bazelrc
+index 0964adc..80d0114 100644
+--- a/.bazelrc
++++ b/.bazelrc
+@@ -13,7 +13,6 @@ common:test --test_env=GTEST_INSTALL_FAILURE_SIGNAL_HANDLER=1
+ ##
+ ##  Custom toolchain.
+ ##
+-build --crosstool_top=@llvm_toolchain//:toolchain --copt=-D_LIBCPP_ENABLE_NODISCARD
+
+ ##
+ ##  Common build options across all build configurations
+@@ -32,7 +31,6 @@ build --copt=-fno-omit-frame-pointer
+
+ build --copt=-fstack-protector
+
+-build --copt=-Werror --copt=-Wimplicit-fallthrough
+
+ build --host_copt=-O1
+ build --host_copt=-DFORCE_DEBUG
+@@ -237,7 +235,6 @@ build:webasm --compilation_mode=opt
+ build:webasm --copt=-DNDEBUG --linkopt=-DNDEBUG # for some reason emscripten doesn't pass those when -O2\-Oz are specified
+ build:webasm --copt=--llvm-lto --copt=3 --linkopt=--llvm-lto --linkopt=3
+ # Specify a "sane" C++ toolchain for the host platform.
+-build:webasm --host_crosstool_top=@llvm_toolchain//:toolchain
+
+ ##
+ ## Stripe's ci passes --config=ci, we need it to exist
+diff --git a/WORKSPACE b/WORKSPACE
+index 0fef86c..f563a37 100644
+--- a/WORKSPACE
++++ b/WORKSPACE
+@@ -4,14 +4,6 @@ load(":third_party/externals.bzl", "register_sorbet_dependencies")
+
+ register_sorbet_dependencies()
+
+-load("@com_grail_bazel_toolchain//toolchain:rules.bzl", "llvm_toolchain")
+-
+-llvm_toolchain(
+-    name = "llvm_toolchain",
+-    absolute_paths = True,
+-    llvm_version = "8.0.0",
+-)
+-
+ load("@io_bazel_rules_go//go:def.bzl", "go_register_toolchains", "go_rules_dependencies")
+
+ go_rules_dependencies()
+diff --git a/common/Subprocess.h b/common/Subprocess.h
+index c1e382d..200ad0c 100644
+--- a/common/Subprocess.h
++++ b/common/Subprocess.h
+@@ -2,6 +2,7 @@
+ #define SORBET_SUBPROCESS_H
+ #include <optional>
+ #include <string>
++#include <vector>
+
+ namespace sorbet {
+
+diff --git a/core/BUILD b/core/BUILD
+index 97b9007..ca7cb1a 100644
+--- a/core/BUILD
++++ b/core/BUILD
+@@ -78,10 +78,8 @@ genrule(
+         "Names_gen.h",
+         "Names_gen.cc",
+     ],
+-    cmd = "$(location :generate_names) $(location Names_gen.h) $(location Names_gen.cc) && \
+-             $(location //tools:clang-format) -i $(location Names_gen.h) $(location Names_gen.cc)",
++    cmd = "$(location :generate_names) $(location Names_gen.h) $(location Names_gen.cc)",
+     tools = [
+         ":generate_names",
+-        "//tools:clang-format",
+     ],
+ )
+diff --git a/main/lsp/BUILD b/main/lsp/BUILD
+index 8b99394..2c9a8f7 100644
+--- a/main/lsp/BUILD
++++ b/main/lsp/BUILD
+@@ -66,11 +66,9 @@ genrule(
+         "lsp_messages_gen.h",
+         "lsp_messages_gen.cc",
+     ],
+-    cmd = "$(location :generate_lsp_messages) $(location lsp_messages_gen.h) $(location lsp_messages_gen.cc) && \
+-             $(location //tools:clang-format) -i $(location lsp_messages_gen.h) $(location lsp_messages_gen.cc)",
++    cmd = "$(location :generate_lsp_messages) $(location lsp_messages_gen.h) $(location lsp_messages_gen.cc)",
+     tools = [
+         ":generate_lsp_messages",
+-        "//tools:clang-format",
+     ],
+ )
+
+diff --git a/parser/BUILD b/parser/BUILD
+index 9e8d97e..8438414 100644
+--- a/parser/BUILD
++++ b/parser/BUILD
+@@ -44,11 +44,9 @@ genrule(
+         "Node_gen.h",
+         "Node_gen.cc",
+     ],
+-    cmd = "$(location :generate_ast) $(location Node_gen.h) $(location Node_gen.cc) && \
+-             $(location //tools:clang-format) -i $(location Node_gen.cc) $(location Node_gen.h)",
++    cmd = "$(location :generate_ast) $(location Node_gen.h) $(location Node_gen.cc)",
+     tools = [
+         ":generate_ast",
+-        "//tools:clang-format",
+     ],
+ )
+
+@@ -57,10 +55,8 @@ genrule(
+     outs = [
+         "diagnostics.cc",
+     ],
+-    cmd = "$(location //third_party/parser:generate_diagnostics) dclassStrings > $(location diagnostics.cc) && \
+-           $(location //tools:clang-format) -i $(location diagnostics.cc)",
++    cmd = "$(location //third_party/parser:generate_diagnostics) dclassStrings > $(location diagnostics.cc)",
+     tools = [
+         "//third_party/parser:generate_diagnostics",
+-        "//tools:clang-format",
+     ],
+ )
+
+diff --git a/third_party/licenses/BUILD b/third_party/licenses/BUILD
+index af0d0ea..a8bee2a 100644
+--- a/third_party/licenses/BUILD
++++ b/third_party/licenses/BUILD
+@@ -40,10 +40,8 @@ genrule(
+     outs = [
+         "licenses.cc",
+     ],
+-    cmd = "$(location :generate_licenses) $(location licenses.cc) $(locations license_files) && \
+-    $(location //tools:clang-format) -i $(location licenses.cc)",
++    cmd = "$(location :generate_licenses) $(location licenses.cc) $(locations license_files)",
+     tools = [
+         ":generate_licenses",
+-        "//tools:clang-format",
+     ],
+ )
+diff --git a/third_party/parser/include/ruby_parser/pool.hh b/third_party/parser/include/ruby_parser/pool.hh
+index 5847c7a..d1fdc38 100644
+--- a/third_party/parser/include/ruby_parser/pool.hh
++++ b/third_party/parser/include/ruby_parser/pool.hh
+@@ -4,6 +4,7 @@
+ #include <type_traits>
+ #include <utility>
+ #include <vector>
++#include <cassert>
+
+ template<typename T, std::size_t N>
+ class pool {
+diff --git a/tools/BUILD b/tools/BUILD
+index 25008bc..888e110 100644
+--- a/tools/BUILD
++++ b/tools/BUILD
+@@ -1,10 +1,5 @@
+-load("//tools:clang.bzl", "clang_tool")
+ load("@compdb//:aspects.bzl", "compilation_database")
+
+-clang_tool("clang-format")
+-
+-clang_tool("clang-tidy")
+-
+ compilation_database(
+     name = "compdb",
+     testonly = True,
+diff --git a/tools/clang.bzl b/tools/clang.bzl
+deleted file mode 100644
+index fab90bf..0000000
+--- a/tools/clang.bzl
++++ /dev/null
+@@ -1,36 +0,0 @@
+-def _clang_tool_impl(ctx):
+-    ctx.actions.write(
+-        ctx.outputs.executable,
+-        "\n".join(
+-            [
+-                "#!/bin/sh",
+-                'exec $0.runfiles/%s/%s "$@"' % (
+-                    ctx.workspace_name,
+-                    ctx.file.tool.short_path,
+-                ),
+-                "",
+-            ],
+-        ),
+-        True,
+-    )
+-
+-    return [DefaultInfo(runfiles = ctx.runfiles(files = [ctx.file.tool]))]
+-
+-_clang_tool = rule(
+-    _clang_tool_impl,
+-    attrs = {
+-        "tool": attr.label(
+-            allow_files = True,
+-            single_file = True,
+-            cfg = "host",
+-        ),
+-    },
+-    executable = True,
+-)
+-
+-def clang_tool(name):
+-    _clang_tool(
+-        name = name,
+-        tool = "@llvm_toolchain//:bin/" + name,
+-        visibility = ["//visibility:public"],
+-    )
+
